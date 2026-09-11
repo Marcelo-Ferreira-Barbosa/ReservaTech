@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import db from "../database/db";
 import { MaintenanceBlock, Reservation, Resource } from "../types";
-import { isEndAfterStart, isValidDate, isValidTime, timeRangesOverlap } from "../utils/time";
+import { isEndAfterStart, isInThePast, isValidDate, isValidTime, timeRangesOverlap } from "../utils/time";
 
 /**
  * Verifica se existe alguma reserva JÁ APROVADA que conflite com o
@@ -89,6 +89,12 @@ export function createReservation(req: Request, res: Response) {
 
   if (!isEndAfterStart(start_time, end_time)) {
     return res.status(400).json({ error: "O horário final deve ser depois do horário inicial." });
+  }
+
+  // Validação de servidor: não adianta só bloquear datas passadas no
+  // formulário do frontend, porque a API pode ser chamada diretamente.
+  if (isInThePast(date, end_time)) {
+    return res.status(400).json({ error: "Não é possível reservar um período que já passou." });
   }
 
   const resource = db.prepare("SELECT * FROM resources WHERE id = ?").get(resource_id) as Resource | undefined;

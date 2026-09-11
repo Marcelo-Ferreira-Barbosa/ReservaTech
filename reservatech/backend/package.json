@@ -7,10 +7,10 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
-    "seed": "tsx src/database/seed.ts"
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "seed": "tsx --env-file-if-exists=.env src/database/seed.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

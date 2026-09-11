@@ -48,3 +48,45 @@ export function isValidDate(value: string): boolean {
 export function isEndAfterStart(start: string, end: string): boolean {
   return start < end;
 }
+
+/**
+ * Data de hoje no formato "YYYY-MM-DD", usando o fuso horário LOCAL
+ * da máquina onde o servidor roda.
+ *
+ * Usamos o horário local (e não UTC / toISOString()) de propósito:
+ * as datas digitadas pelo usuário no frontend são datas locais, então
+ * comparar com UTC faria a virada do dia acontecer na hora errada
+ * (no Brasil, 3 horas antes da meia-noite real).
+ */
+export function todayISO(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Hora atual no formato "HH:MM" (24h), também no fuso local.
+ */
+export function currentTimeHHMM(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Diz se um par data + horário final já ficou no passado.
+ *
+ * REGRA ADOTADA: o que impede a reserva é o horário de TÉRMINO já ter
+ * passado. Ou seja, não dá para reservar um período que já acabou, mas
+ * ainda é possível reservar um período que está em andamento agora
+ * (ex: às 15:00, reservar das 14:00 às 16:00). Escolhemos assim porque
+ * é a regra menos restritiva que ainda barra o caso que realmente não
+ * faz sentido: reservar ontem.
+ */
+export function isInThePast(date: string, endTime: string): boolean {
+  const today = todayISO();
+  if (date < today) return true;
+  if (date > today) return false;
+  return endTime <= currentTimeHHMM();
+}
