@@ -23,9 +23,11 @@ Classificadas por dificuldade estimada.
       ficaram conflitantes depois que uma outra foi aprovada para o
       mesmo horário (ver decisão registrada em `docs/DECISOES_TECNICAS.md`,
       item 3).
-- [ ] Reverter automaticamente o status de um recurso de `manutencao`
-      para `ativo` quando a data/hora do bloqueio já passou, em vez de
-      depender de remoção manual (ver `docs/DECISOES_TECNICAS.md`, item 6).
+- [ ] Virar o status de um recurso para `manutencao` quando a data de um
+      bloqueio futuro chegar, e revertê-lo para `ativo` quando a data/hora
+      do bloqueio passar — em vez de depender de remoção manual. Hoje o
+      status só é marcado na criação de um bloqueio para o mesmo dia
+      (ver `docs/DECISOES_TECNICAS.md`, item 7).
 - [ ] Página de histórico mais completa para o usuário comum (reservas
       canceladas e recusadas também, com filtro por período).
 - [ ] Validações de formulário mais completas no frontend (ex: impedir

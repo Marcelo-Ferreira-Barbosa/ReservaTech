@@ -127,18 +127,52 @@ banco, o que vai contra a prioridade de simplicidade do projeto.
 
 ## 7. Bloqueio de manutenção muda o status do recurso para "manutenção"
 
-**Decisão:** ao criar um `maintenance_block`, o recurso associado tem seu
-`status` alterado automaticamente para `manutencao`. Ao remover o
-último bloqueio de um recurso, o status volta para `ativo`.
+**Decisão:** ao criar um `maintenance_block` **para a data de hoje**, o
+recurso associado tem seu `status` alterado automaticamente para
+`manutencao`. Ao remover o último bloqueio de um recurso, o status volta
+para `ativo` — mas somente se ele estiver em `manutencao`.
 
 **Por quê:** simplifica a exibição no frontend — a lista de recursos
 pode mostrar o status diretamente, sem precisar cruzar com a tabela de
 bloqueios toda vez.
 
-**Limitação aceita:** o status não volta automaticamente para `ativo`
-quando a data/hora do bloqueio simplesmente passa (ele só volta quando o
-bloqueio é **removido manualmente**). Reverter isso automaticamente por
+**Por que só para hoje:** um bloqueio agendado para daqui a um mês não
+pode deixar o recurso indisponível desde já. O que realmente impede as
+reservas dentro do período bloqueado é a checagem de conflito em
+`reservationController` (`hasMaintenanceConflict`), que olha a tabela de
+bloqueios e funciona independente do `status`. O `status` é só o
+indicador visual do estado **atual** do recurso.
+
+**Por que a volta para `ativo` é condicional:** se o admin tinha marcado
+o recurso como `inativo` (quebrado, aposentado), remover um bloqueio de
+manutenção antigo não pode reativá-lo sozinho. Por isso o `UPDATE` tem
+`AND status = 'manutencao'`.
+
+**Limitação aceita:** o status não vira `manutencao` sozinho quando a
+data de um bloqueio futuro chega, nem volta para `ativo` quando a
+data/hora do bloqueio simplesmente passa (ele só volta quando o bloqueio
+é **removido manualmente**). Fazer essas duas viradas automaticamente por
 tempo é uma melhoria futura (ver `TODO.md`).
+
+---
+
+## 7b. Bloqueio de manutenção não pode ser criado sobre reservas aprovadas
+
+**Decisão:** criar um `maintenance_block` que se sobreponha a uma reserva
+já `aprovada` do mesmo recurso e data é recusado com `409`, e a resposta
+traz a lista de reservas conflitantes (`conflicts`).
+
+**Por quê:** criar o bloqueio por cima deixaria reservas com status
+`aprovada` que na prática não poderiam acontecer — o usuário apareceria
+na sala e ela estaria interditada. Preferimos que o admin veja o
+conflito e decida conscientemente: escolher outro horário, ou cancelar
+as reservas afetadas (o que já avisa o usuário via `reason`) e então
+criar o bloqueio.
+
+**Trade-off aceito:** para uma manutenção emergencial o admin precisa de
+dois passos (cancelar as reservas, depois bloquear) em vez de um. Achamos
+aceitável porque o cancelamento é justamente o momento de registrar o
+motivo para o usuário.
 
 ---
 
