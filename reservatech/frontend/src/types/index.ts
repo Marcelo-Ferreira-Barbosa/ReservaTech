@@ -20,7 +20,7 @@ export interface Resource {
   created_at: string;
 }
 
-export type ReservationStatus = "pendente" | "aprovada" | "recusada" | "cancelada";
+export type ReservationStatus = "pendente" | "aprovada" | "recusada" | "cancelada" | "espera";
 
 export interface Reservation {
   id: number;
@@ -45,4 +45,16 @@ export interface MaintenanceBlock {
   end_time: string;
   reason: string;
   created_at: string;
+}
+
+export interface EquipmentLoan {
+  reservation_id: number;
+  resource_name: string;
+  resource_type: ResourceType;
+  user_name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  checked_out_at: string | null;
+  returned_at: string | null;
 }

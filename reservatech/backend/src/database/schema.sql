@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS reservations (
   date TEXT NOT NULL,        -- formato YYYY-MM-DD
   start_time TEXT NOT NULL,  -- formato HH:MM
   end_time TEXT NOT NULL,    -- formato HH:MM
-  status TEXT NOT NULL CHECK (status IN ('pendente', 'aprovada', 'recusada', 'cancelada')) DEFAULT 'pendente',
+  status TEXT NOT NULL CHECK (status IN ('pendente', 'aprovada', 'recusada', 'cancelada', 'espera')) DEFAULT 'pendente',
   reason TEXT,               -- motivo de recusa ou cancelamento
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -53,3 +53,10 @@ CREATE TABLE IF NOT EXISTS maintenance_blocks (
 
 CREATE INDEX IF NOT EXISTS idx_reservations_resource_date ON reservations(resource_id, date);
 CREATE INDEX IF NOT EXISTS idx_maintenance_resource_date ON maintenance_blocks(resource_id, date);
+
+CREATE TABLE IF NOT EXISTS equipment_loans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reservation_id INTEGER NOT NULL UNIQUE REFERENCES reservations(id),
+  checked_out_at TEXT NOT NULL DEFAULT (datetime('now')),
+  returned_at TEXT
+);
