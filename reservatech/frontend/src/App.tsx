@@ -4,6 +4,7 @@ import { PrivateRoute } from "./components/PrivateRoute";
 import { useAuth } from "./context/AuthContext";
 import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
+import { EquipmentLoans } from "./pages/admin/EquipmentLoans";
 import { Maintenance } from "./pages/admin/Maintenance";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { ManageResources } from "./pages/admin/ManageResources";
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/admin/recursos" element={<PrivateRoute requiredRole="admin"><ManageResources /></PrivateRoute>} />
           <Route path="/admin/solicitacoes" element={<PrivateRoute requiredRole="admin"><ReservationRequests /></PrivateRoute>} />
           <Route path="/admin/manutencao" element={<PrivateRoute requiredRole="admin"><Maintenance /></PrivateRoute>} />
+          <Route path="/admin/retiradas" element={<PrivateRoute requiredRole="admin"><EquipmentLoans /></PrivateRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

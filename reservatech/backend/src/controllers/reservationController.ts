@@ -1,17 +1,9 @@
 import { Request, Response } from "express";
 import db from "../database/db";
+import { notifyRequester } from "../services/emailService";
 import { MaintenanceBlock, Reservation, Resource } from "../types";
 import { isEndAfterStart, isInThePast, isValidDate, isValidTime, timeRangesOverlap } from "../utils/time";
 
-/**
- * Verifica se existe alguma reserva JÁ APROVADA que conflite com o
- * intervalo informado, para o mesmo recurso e mesma data.
- * Reservas "pendente", "recusada" e "cancelada" NÃO contam como
- * conflito - só "aprovada" bloqueia outra aprovação/criação.
- *
- * (Ver docs/DECISOES_TECNICAS.md para a explicação de por que
- * pendentes conflitantes são permitidas de coexistir.)
- */
 function hasApprovedConflict(
   resourceId: number,
   date: string,
@@ -28,10 +20,6 @@ function hasApprovedConflict(
   return approvedReservations.some((r) => timeRangesOverlap(startTime, endTime, r.start_time, r.end_time));
 }
 
-/**
- * Verifica se o intervalo informado cai dentro de algum bloqueio de
- * manutenção cadastrado para o recurso, na mesma data.
- */
 function hasMaintenanceConflict(
   resourceId: number,
   date: string,
@@ -46,7 +34,6 @@ function hasMaintenanceConflict(
 }
 
 export function listReservations(req: Request, res: Response) {
-  // Usuário comum só vê as próprias reservas. Admin vê todas.
   if (req.user!.role === "admin") {
     const reservations = db
       .prepare(
@@ -91,8 +78,6 @@ export function createReservation(req: Request, res: Response) {
     return res.status(400).json({ error: "O horário final deve ser depois do horário inicial." });
   }
 
-  // Validação de servidor: não adianta só bloquear datas passadas no
-  // formulário do frontend, porque a API pode ser chamada diretamente.
   if (isInThePast(date, end_time)) {
     return res.status(400).json({ error: "Não é possível reservar um período que já passou." });
   }
@@ -110,17 +95,19 @@ export function createReservation(req: Request, res: Response) {
     return res.status(409).json({ error: "O recurso está bloqueado para manutenção neste período." });
   }
 
-  if (hasApprovedConflict(resource_id, date, start_time, end_time)) {
-    return res.status(409).json({ error: "Já existe uma reserva aprovada que conflita com este horário." });
-  }
+  const isConflict = hasApprovedConflict(resource_id, date, start_time, end_time);
+  const status = isConflict ? "espera" : "pendente";
 
   const result = db
     .prepare(
-      "INSERT INTO reservations (user_id, resource_id, date, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, 'pendente')"
+      "INSERT INTO reservations (user_id, resource_id, date, start_time, end_time, status) VALUES (?, ?, ?, ?, ?, ?)"
     )
-    .run(req.user!.id, resource_id, date, start_time, end_time);
+    .run(req.user!.id, resource_id, date, start_time, end_time, status);
 
   const reservation = db.prepare("SELECT * FROM reservations WHERE id = ?").get(result.lastInsertRowid);
+  if (status === "espera") {
+    notifyRequester(result.lastInsertRowid);
+  }
   return res.status(201).json(reservation);
 }
 
@@ -139,8 +126,6 @@ export function approveReservation(req: Request, res: Response) {
     return res.status(409).json({ error: "O recurso está bloqueado para manutenção neste período." });
   }
 
-  // Checagem final de conflito no momento da aprovação: outra reserva
-  // pode ter sido aprovada entre a criação desta e agora.
   if (
     hasApprovedConflict(reservation.resource_id, reservation.date, reservation.start_time, reservation.end_time, reservation.id)
   ) {
@@ -149,6 +134,7 @@ export function approveReservation(req: Request, res: Response) {
 
   db.prepare("UPDATE reservations SET status = 'aprovada', reason = NULL WHERE id = ?").run(req.params.id);
   const updated = db.prepare("SELECT * FROM reservations WHERE id = ?").get(req.params.id);
+  notifyRequester(req.params.id);
   return res.json(updated);
 }
 
@@ -170,6 +156,7 @@ export function rejectReservation(req: Request, res: Response) {
 
   db.prepare("UPDATE reservations SET status = 'recusada', reason = ? WHERE id = ?").run(reason, req.params.id);
   const updated = db.prepare("SELECT * FROM reservations WHERE id = ?").get(req.params.id);
+  notifyRequester(req.params.id);
   return res.json(updated);
 }
 
@@ -181,7 +168,6 @@ export function cancelReservation(req: Request, res: Response) {
     return res.status(404).json({ error: "Reserva não encontrada." });
   }
 
-  // Usuário comum só pode cancelar a própria reserva. Admin pode cancelar qualquer uma.
   if (req.user!.role !== "admin" && reservation.user_id !== req.user!.id) {
     return res.status(403).json({ error: "Você não pode cancelar uma reserva de outro usuário." });
   }
@@ -192,5 +178,23 @@ export function cancelReservation(req: Request, res: Response) {
 
   db.prepare("UPDATE reservations SET status = 'cancelada', reason = ? WHERE id = ?").run(reason || null, req.params.id);
   const updated = db.prepare("SELECT * FROM reservations WHERE id = ?").get(req.params.id);
+  notifyRequester(req.params.id);
+
+  // Se a reserva cancelada era 'aprovada', verificamos se há alguém na fila de espera ('espera') para o mesmo recurso e data
+  if (reservation.status === 'aprovada') {
+    const waitingList = db
+      .prepare(
+        "SELECT * FROM reservations WHERE resource_id = ? AND date = ? AND status = 'espera' ORDER BY created_at ASC"
+      )
+      .all(reservation.resource_id, reservation.date) as unknown as Reservation[];
+
+    const nextInLine = waitingList.find((w) => timeRangesOverlap(reservation.start_time, reservation.end_time, w.start_time, w.end_time));
+
+    if (nextInLine) {
+      db.prepare("UPDATE reservations SET status = 'pendente' WHERE id = ?").run(nextInLine.id);
+      notifyRequester(nextInLine.id);
+    }
+  }
+
   return res.json(updated);
 }

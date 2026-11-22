@@ -31,6 +31,7 @@ export function Navbar() {
             <NavLink to="/admin/recursos">Recursos</NavLink>
             <NavLink to="/admin/solicitacoes">Solicitações</NavLink>
             <NavLink to="/admin/manutencao">Manutenção</NavLink>
+            <NavLink to="/admin/retiradas">Retiradas</NavLink>
           </>
         )}
       </nav>

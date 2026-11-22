@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import authRoutes from "./routes/authRoutes";
+import loanRoutes from "./routes/loanRoutes";
 import maintenanceRoutes from "./routes/maintenanceRoutes";
 import reservationRoutes from "./routes/reservationRoutes";
 import resourceRoutes from "./routes/resourceRoutes";
@@ -19,6 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
+app.use("/api/loans", loanRoutes);
 
 // Handler simples de erros não tratados, para não derrubar o servidor
 // e sempre responder algo em JSON.
