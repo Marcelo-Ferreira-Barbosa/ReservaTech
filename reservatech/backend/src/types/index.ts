@@ -36,6 +36,18 @@ export interface Reservation {
   created_at: string;
 }
 
+export type ReservationAction = "aprovada" | "recusada" | "cancelada";
+
+export interface ReservationLog {
+  id: number;
+  reservation_id: number;
+  performed_by: number;
+  performed_by_name?: string;
+  action: ReservationAction;
+  reason: string | null;
+  created_at: string;
+}
+
 export interface MaintenanceBlock {
   id: number;
   resource_id: number;

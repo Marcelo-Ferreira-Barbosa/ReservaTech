@@ -3,6 +3,16 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { api, getErrorMessage } from "../../services/api";
 import { Reservation } from "../../types";
 
+const actionLabels = { aprovada: "Aprovada", recusada: "Recusada", cancelada: "Cancelada" };
+
+// O banco grava em UTC ("YYYY-MM-DD HH:MM:SS"); aqui convertemos para o horário local.
+function formatDateTime(value: string) {
+  return new Date(value.replace(" ", "T") + "Z").toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
 export function ReservationRequests() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +125,7 @@ export function ReservationRequests() {
             <th>Horário</th>
             <th>Status</th>
             <th>Motivo</th>
+            <th>Quem e quando</th>
           </tr>
         </thead>
         <tbody>
@@ -126,6 +137,15 @@ export function ReservationRequests() {
               <td>{r.start_time} - {r.end_time}</td>
               <td><StatusBadge status={r.status} /></td>
               <td>{r.reason ?? "—"}</td>
+              <td>
+                {r.history?.length
+                  ? r.history.map((log) => (
+                      <div key={log.id}>
+                        {actionLabels[log.action]} por {log.performed_by_name} em {formatDateTime(log.created_at)}
+                      </div>
+                    ))
+                  : "—"}
+              </td>
             </tr>
           ))}
         </tbody>
