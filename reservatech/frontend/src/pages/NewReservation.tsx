@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { DateList } from "../components/DateList";
 import { api, getErrorMessage } from "../services/api";
-import { Resource } from "../types";
+import { Resource, SeriesCreationResult } from "../types";
+import { countWeeklyDates, describeWeekday, formatDateCount, maxSeriesEndDate } from "../utils/series";
 
 export function NewReservation() {
   const navigate = useNavigate();
@@ -10,6 +12,9 @@ export function NewReservation() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [repeat, setRepeat] = useState(false);
+  const [endDate, setEndDate] = useState("");
+  const [seriesResult, setSeriesResult] = useState<SeriesCreationResult | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -35,20 +40,61 @@ export function NewReservation() {
 
     setLoading(true);
     try {
-      await api.post("/reservations", {
+      const request = {
         resource_id: Number(resourceId),
-        date,
         start_time: startTime,
         end_time: endTime,
-      });
-      setSuccess(true);
-      setTimeout(() => navigate("/minhas-reservas"), 1200);
+      };
+
+      if (repeat) {
+        // A série não redireciona sozinha: o resumo precisa ser lido.
+        const res = await api.post("/reservations/series", { ...request, start_date: date, end_date: endDate });
+        setSeriesResult(res.data);
+      } else {
+        await api.post("/reservations", { ...request, date });
+        setSuccess(true);
+        setTimeout(() => navigate("/minhas-reservas"), 1200);
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
+
+  if (seriesResult) {
+    const pending = seriesResult.reservations.filter((r) => r.status === "pendente").map((r) => r.date);
+    const waiting = seriesResult.reservations.filter((r) => r.status === "espera").map((r) => r.date);
+
+    return (
+      <div className="page page-narrow">
+        <h1>Nova reserva</h1>
+
+        <div className="card-form">
+          <div className="alert alert-success">Solicitação recorrente enviada!</div>
+          {pending.length > 0 && (
+            <div>
+              <strong>Aguardando aprovação ({formatDateCount(pending.length)}):</strong> <DateList dates={pending} />
+            </div>
+          )}
+          {waiting.length > 0 && (
+            <div>
+              <strong>Na fila de espera ({formatDateCount(waiting.length)}):</strong> <DateList dates={waiting} />
+            </div>
+          )}
+          {seriesResult.skipped_dates.length > 0 && (
+            <div>
+              <strong>Não reservadas por manutenção ({formatDateCount(seriesResult.skipped_dates.length)}):</strong>{" "}
+              <DateList dates={seriesResult.skipped_dates} />
+            </div>
+          )}
+          <Link to="/minhas-reservas" className="btn btn-primary">Ver minhas reservas</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const dateCount = date && endDate ? countWeeklyDates(date, endDate) : 0;
 
   return (
     <div className="page page-narrow">
@@ -69,7 +115,7 @@ export function NewReservation() {
         </label>
 
         <label>
-          Data
+          {repeat ? "Primeira data" : "Data"}
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </label>
 
@@ -84,8 +130,34 @@ export function NewReservation() {
           </label>
         </div>
 
+        <label className="checkbox-label">
+          <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
+          Repetir toda semana
+        </label>
+
+        {repeat && (
+          <label>
+            Repetir até
+            <input
+              type="date"
+              value={endDate}
+              min={date || undefined}
+              max={date ? maxSeriesEndDate(date) : undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              required
+            />
+          </label>
+        )}
+
+        {repeat && dateCount > 1 && (
+          <p className="form-hint">
+            {describeWeekday(date)}: <strong>{formatDateCount(dateCount)}</strong> no período.
+          </p>
+        )}
+
         <p className="form-hint">
           Sua solicitação ficará com status <strong>pendente</strong> até que um administrador aprove ou recuse.
+          {repeat && " Datas em conflito com reservas aprovadas vão para a fila de espera, e datas com manutenção ficam de fora."}
         </p>
 
         <button type="submit" className="btn btn-primary" disabled={loading}>
