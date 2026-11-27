@@ -41,6 +41,20 @@ CREATE TABLE IF NOT EXISTS reservations (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Histórico de decisões sobre as reservas: quem aprovou, recusou ou
+-- cancelou, e quando. Só recebe INSERT: uma reserva aprovada e depois
+-- cancelada fica com as duas linhas.
+CREATE TABLE IF NOT EXISTS reservation_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reservation_id INTEGER NOT NULL REFERENCES reservations(id),
+  performed_by INTEGER NOT NULL REFERENCES users(id),
+  action TEXT NOT NULL CHECK (action IN ('aprovada', 'recusada', 'cancelada')),
+  reason TEXT,               -- motivo informado na recusa ou cancelamento
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))  -- em UTC
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservation_logs_reservation ON reservation_logs(reservation_id);
+
 CREATE TABLE IF NOT EXISTS maintenance_blocks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   resource_id INTEGER NOT NULL REFERENCES resources(id),

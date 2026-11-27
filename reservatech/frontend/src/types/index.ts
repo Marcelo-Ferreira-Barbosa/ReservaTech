@@ -22,6 +22,14 @@ export interface Resource {
 
 export type ReservationStatus = "pendente" | "aprovada" | "recusada" | "cancelada" | "espera";
 
+export interface ReservationLog {
+  id: number;
+  performed_by_name: string;
+  action: "aprovada" | "recusada" | "cancelada";
+  reason: string | null;
+  created_at: string;
+}
+
 export interface Reservation {
   id: number;
   user_id: number;
@@ -33,6 +41,7 @@ export interface Reservation {
   end_time: string;
   status: ReservationStatus;
   reason: string | null;
+  history?: ReservationLog[]; // só vem na listagem do admin
   created_at: string;
 }
 

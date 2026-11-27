@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import db from "../database/db";
 import { notifyRequester } from "../services/emailService";
-import { MaintenanceBlock, Reservation, Resource } from "../types";
+import { MaintenanceBlock, Reservation, ReservationAction, ReservationLog, Resource } from "../types";
 import { isEndAfterStart, isInThePast, isValidDate, isValidTime, timeRangesOverlap } from "../utils/time";
 
 function hasApprovedConflict(
@@ -33,6 +33,40 @@ function hasMaintenanceConflict(
   return blocks.some((b) => timeRangesOverlap(startTime, endTime, b.start_time, b.end_time));
 }
 
+// Muda o status e registra no histórico quem fez a ação. As duas escritas
+// ficam na mesma transação para nunca existir mudança sem registro.
+function changeStatus(
+  reservationId: number,
+  action: ReservationAction,
+  performedBy: number,
+  reason: string | null
+) {
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE reservations SET status = ?, reason = ? WHERE id = ?").run(action, reason, reservationId);
+    db.prepare(
+      "INSERT INTO reservation_logs (reservation_id, performed_by, action, reason) VALUES (?, ?, ?, ?)"
+    ).run(reservationId, performedBy, action, reason);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+function withHistory(reservations: Reservation[]) {
+  const logs = db
+    .prepare(
+      `SELECT reservation_logs.*, users.name as performed_by_name
+       FROM reservation_logs
+       JOIN users ON users.id = reservation_logs.performed_by
+       ORDER BY reservation_logs.id`
+    )
+    .all() as unknown as ReservationLog[];
+
+  return reservations.map((r) => ({ ...r, history: logs.filter((log) => log.reservation_id === r.id) }));
+}
+
 export function listReservations(req: Request, res: Response) {
   if (req.user!.role === "admin") {
     const reservations = db
@@ -43,8 +77,8 @@ export function listReservations(req: Request, res: Response) {
          JOIN resources ON resources.id = reservations.resource_id
          ORDER BY reservations.created_at DESC`
       )
-      .all();
-    return res.json(reservations);
+      .all() as unknown as Reservation[];
+    return res.json(withHistory(reservations));
   }
 
   const reservations = db
@@ -132,7 +166,7 @@ export function approveReservation(req: Request, res: Response) {
     return res.status(409).json({ error: "Já existe outra reserva aprovada que conflita com este horário." });
   }
 
-  db.prepare("UPDATE reservations SET status = 'aprovada', reason = NULL WHERE id = ?").run(req.params.id);
+  changeStatus(reservation.id, "aprovada", req.user!.id, null);
   const updated = db.prepare("SELECT * FROM reservations WHERE id = ?").get(req.params.id);
   notifyRequester(req.params.id);
   return res.json(updated);
@@ -154,7 +188,7 @@ export function rejectReservation(req: Request, res: Response) {
     return res.status(400).json({ error: "Só é possível recusar reservas com status pendente." });
   }
 
-  db.prepare("UPDATE reservations SET status = 'recusada', reason = ? WHERE id = ?").run(reason, req.params.id);
+  changeStatus(reservation.id, "recusada", req.user!.id, reason);
   const updated = db.prepare("SELECT * FROM reservations WHERE id = ?").get(req.params.id);
   notifyRequester(req.params.id);
   return res.json(updated);
@@ -176,7 +210,7 @@ export function cancelReservation(req: Request, res: Response) {
     return res.status(400).json({ error: "Esta reserva já está cancelada." });
   }
 
-  db.prepare("UPDATE reservations SET status = 'cancelada', reason = ? WHERE id = ?").run(reason || null, req.params.id);
+  changeStatus(reservation.id, "cancelada", req.user!.id, reason || null);
   const updated = db.prepare("SELECT * FROM reservations WHERE id = ?").get(req.params.id);
   notifyRequester(req.params.id);
 
