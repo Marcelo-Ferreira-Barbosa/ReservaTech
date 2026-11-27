@@ -167,6 +167,12 @@ input:focus, select:focus, textarea:focus {
   color: var(--color-text-muted);
 }
 
+.checkbox-label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .card-form {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -331,6 +337,28 @@ input:focus, select:focus, textarea:focus {
 .table-actions {
   display: flex;
   gap: 0.4rem;
+}
+
+.series-occurrence td {
+  background: var(--color-bg);
+}
+
+.status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  white-space: nowrap;
+}
+
+.nowrap,
+.badge,
+.table-actions .btn {
+  white-space: nowrap;
+}
+
+.card-form a.btn {
+  text-align: center;
+  text-decoration: none;
 }
 
 .empty-state {

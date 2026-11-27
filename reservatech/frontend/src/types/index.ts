@@ -42,7 +42,13 @@ export interface Reservation {
   status: ReservationStatus;
   reason: string | null;
   history?: ReservationLog[]; // só vem na listagem do admin
+  series_id: number | null; // preenchido quando faz parte de uma reserva recorrente
   created_at: string;
+}
+
+export interface SeriesCreationResult {
+  reservations: Reservation[];
+  skipped_dates: string[];
 }
 
 export interface MaintenanceBlock {

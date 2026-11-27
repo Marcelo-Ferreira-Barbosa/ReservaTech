@@ -29,6 +29,19 @@ CREATE TABLE IF NOT EXISTS resources (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Pedido de reserva que se repete toda semana. Cada data vira uma linha
+-- normal em reservations, ligada à série por series_id.
+CREATE TABLE IF NOT EXISTS reservation_series (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  resource_id INTEGER NOT NULL REFERENCES resources(id),
+  start_date TEXT NOT NULL,  -- primeira data, define o dia da semana
+  end_date TEXT NOT NULL,    -- repetir até esta data (inclusive)
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS reservations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -38,6 +51,8 @@ CREATE TABLE IF NOT EXISTS reservations (
   end_time TEXT NOT NULL,    -- formato HH:MM
   status TEXT NOT NULL CHECK (status IN ('pendente', 'aprovada', 'recusada', 'cancelada', 'espera')) DEFAULT 'pendente',
   reason TEXT,               -- motivo de recusa ou cancelamento
+  -- NULL em reserva única. Em bancos antigos a coluna é criada pelo db.ts.
+  series_id INTEGER REFERENCES reservation_series(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

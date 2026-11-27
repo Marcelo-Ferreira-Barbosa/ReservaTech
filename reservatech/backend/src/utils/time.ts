@@ -39,7 +39,47 @@ export function isValidTime(value: string): boolean {
 export function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(value + "T00:00:00");
-  return !Number.isNaN(date.getTime());
+  // O JavaScript "corrige" datas como 30/02 para 02/03 em vez de recusar,
+  // por isso conferimos se a data continua a mesma depois da conversão.
+  return !Number.isNaN(date.getTime()) && toISODate(date) === value;
+}
+
+/**
+ * Converte um Date para "YYYY-MM-DD" no fuso horário LOCAL.
+ */
+export function toISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Datas de uma repetição semanal: a primeira e as seguintes de 7 em 7
+ * dias, até a data final (inclusive). Usamos meio-dia para que uma
+ * eventual mudança de horário de verão não troque o dia.
+ */
+export function weeklyDates(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(startDate + "T12:00:00");
+
+  while (toISODate(current) <= endDate) {
+    dates.push(toISODate(current));
+    current.setDate(current.getDate() + 7);
+  }
+
+  return dates;
+}
+
+/**
+ * Soma meses a uma data. Se o dia não existir no mês de destino (ex: 31/08
+ * mais 6 meses), fica no último dia desse mês.
+ */
+export function addMonths(value: string, months: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  const targetMonth = month - 1 + months;
+  const lastDayOfTarget = new Date(year, targetMonth + 1, 0).getDate();
+  return toISODate(new Date(year, targetMonth, Math.min(day, lastDayOfTarget)));
 }
 
 /**
@@ -59,11 +99,7 @@ export function isEndAfterStart(start: string, end: string): boolean {
  * (no Brasil, 3 horas antes da meia-noite real).
  */
 export function todayISO(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return toISODate(new Date());
 }
 
 /**

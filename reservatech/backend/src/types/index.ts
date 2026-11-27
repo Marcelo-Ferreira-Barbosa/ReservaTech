@@ -22,7 +22,7 @@ export interface Resource {
   created_at: string;
 }
 
-export type ReservationStatus = "pendente" | "aprovada" | "recusada" | "cancelada";
+export type ReservationStatus = "pendente" | "aprovada" | "recusada" | "cancelada" | "espera";
 
 export interface Reservation {
   id: number;
@@ -33,6 +33,18 @@ export interface Reservation {
   end_time: string;
   status: ReservationStatus;
   reason: string | null;
+  series_id: number | null;
+  created_at: string;
+}
+
+export interface ReservationSeries {
+  id: number;
+  user_id: number;
+  resource_id: number;
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
   created_at: string;
 }
 

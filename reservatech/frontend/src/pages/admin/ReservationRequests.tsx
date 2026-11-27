@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { DateList } from "../../components/DateList";
 import { StatusBadge } from "../../components/StatusBadge";
 import { api, getErrorMessage } from "../../services/api";
 import { Reservation } from "../../types";
+import { describePeriod, describeWeekday, formatDateCount, groupBySeries } from "../../utils/series";
 
 const actionLabels = { aprovada: "Aprovada", recusada: "Recusada", cancelada: "Cancelada" };
 
@@ -17,7 +19,9 @@ export function ReservationRequests() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
+  // O que está sendo recusado: uma reserva ou uma reserva recorrente inteira.
+  const [rejecting, setRejecting] = useState<{ path: string; isSeries: boolean } | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
   async function loadReservations() {
@@ -32,6 +36,7 @@ export function ReservationRequests() {
 
   async function handleApprove(id: number) {
     setError("");
+    setNotice("");
     try {
       await api.patch(`/reservations/${id}/approve`, {});
       loadReservations();
@@ -40,8 +45,26 @@ export function ReservationRequests() {
     }
   }
 
-  function openRejectForm(id: number) {
-    setRejectingId(id);
+  async function handleApproveSeries(seriesId: number) {
+    setError("");
+    setNotice("");
+    try {
+      const res = await api.patch(`/reservations/series/${seriesId}/approve`, {});
+      const approved: string[] = res.data.approved_dates;
+      const conflicts: string[] = res.data.conflict_dates;
+      let message = `Reserva recorrente: ${formatDateCount(approved.length)} com aprovação registrada.`;
+      if (conflicts.length > 0) {
+        message += ` Continuam pendentes por conflito: ${conflicts.join(", ")}.`;
+      }
+      setNotice(message);
+      loadReservations();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  function openRejectForm(path: string, isSeries = false) {
+    setRejecting({ path, isSeries });
     setRejectReason("");
   }
 
@@ -51,9 +74,10 @@ export function ReservationRequests() {
       return;
     }
     setError("");
+    setNotice("");
     try {
-      await api.patch(`/reservations/${rejectingId}/reject`, { reason: rejectReason });
-      setRejectingId(null);
+      await api.patch(`${rejecting!.path}/reject`, { reason: rejectReason });
+      setRejecting(null);
       loadReservations();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -69,6 +93,7 @@ export function ReservationRequests() {
     <div className="page">
       <h1>Solicitações de reserva</h1>
       {error && <div className="alert alert-error">{error}</div>}
+      {notice && <div className="alert alert-success">{notice}</div>}
 
       <h2>Pendentes</h2>
       {pending.length === 0 ? (
@@ -85,31 +110,68 @@ export function ReservationRequests() {
             </tr>
           </thead>
           <tbody>
-            {pending.map((r) => (
-              <tr key={r.id}>
-                <td>{r.user_name}</td>
-                <td>{r.resource_name}</td>
-                <td>{r.date}</td>
-                <td>{r.start_time} - {r.end_time}</td>
-                <td className="table-actions">
-                  <button className="btn btn-primary btn-small" onClick={() => handleApprove(r.id)}>Aprovar</button>
-                  <button className="btn btn-danger btn-small" onClick={() => openRejectForm(r.id)}>Recusar</button>
-                </td>
-              </tr>
-            ))}
+            {groupBySeries(pending).map((group) => {
+              const r = group[0];
+              const seriesId = r.series_id;
+              return (
+                <tr key={r.id}>
+                  <td>{r.user_name}</td>
+                  <td>{r.resource_name}</td>
+                  <td>
+                    {seriesId ? (
+                      <>
+                        {describeWeekday(r.date)}
+                        <details className="form-hint">
+                          <summary className="nowrap">{describePeriod(group)}</summary>
+                          <DateList dates={group.map((occurrence) => occurrence.date)} />
+                        </details>
+                      </>
+                    ) : (
+                      r.date
+                    )}
+                  </td>
+                  <td>{r.start_time} - {r.end_time}</td>
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        className="btn btn-primary btn-small"
+                        onClick={() => (seriesId ? handleApproveSeries(seriesId) : handleApprove(r.id))}
+                      >
+                        {seriesId ? "Aprovar série" : "Aprovar"}
+                      </button>
+                      <button
+                        className="btn btn-danger btn-small"
+                        onClick={() =>
+                          seriesId
+                            ? openRejectForm(`/reservations/series/${seriesId}`, true)
+                            : openRejectForm(`/reservations/${r.id}`)
+                        }
+                      >
+                        {seriesId ? "Recusar série" : "Recusar"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
 
-      {rejectingId !== null && (
+      {rejecting !== null && (
         <div className="inline-form">
+          {rejecting.isSeries && (
+            <span className="form-hint">
+              A recusa vale para todas as datas pendentes e em espera desta reserva recorrente.
+            </span>
+          )}
           <label>
             Motivo da recusa
             <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} autoFocus />
           </label>
           <div className="form-actions">
             <button className="btn btn-danger btn-small" onClick={confirmReject}>Confirmar recusa</button>
-            <button className="btn btn-ghost btn-small" onClick={() => setRejectingId(null)}>Cancelar</button>
+            <button className="btn btn-ghost btn-small" onClick={() => setRejecting(null)}>Cancelar</button>
           </div>
         </div>
       )}
@@ -133,7 +195,10 @@ export function ReservationRequests() {
             <tr key={r.id}>
               <td>{r.user_name}</td>
               <td>{r.resource_name}</td>
-              <td>{r.date}</td>
+              <td className="nowrap">
+                {r.date}
+                {r.series_id && <div className="form-hint">recorrente</div>}
+              </td>
               <td>{r.start_time} - {r.end_time}</td>
               <td><StatusBadge status={r.status} /></td>
               <td>{r.reason ?? "—"}</td>

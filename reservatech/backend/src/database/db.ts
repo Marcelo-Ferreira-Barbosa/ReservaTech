@@ -37,4 +37,26 @@ const schemaPath = path.join(__dirname, "schema.sql");
 const schema = fs.readFileSync(schemaPath, "utf-8");
 db.exec(schema);
 
+// Bancos criados antes das reservas recorrentes não têm a coluna
+// series_id. O SQLite dá erro se o ALTER TABLE for repetido, por isso ele
+// não fica no schema.sql, que roda a cada subida do servidor.
+const reservationColumns = db.prepare("PRAGMA table_info(reservations)").all() as unknown as { name: string }[];
+if (!reservationColumns.some((column) => column.name === "series_id")) {
+  db.exec("ALTER TABLE reservations ADD COLUMN series_id INTEGER REFERENCES reservation_series(id)");
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_reservations_series ON reservations(series_id)");
+
+// Executa várias escritas como uma só: ou todas são gravadas, ou nenhuma.
+export function inTransaction<T>(work: () => T): T {
+  db.exec("BEGIN");
+  try {
+    const result = work();
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 export default db;
